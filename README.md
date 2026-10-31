@@ -18,7 +18,7 @@ Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](R
 書籍の C++ 実装をそのまま写すのではなく、各言語の機能を使って再設計することを目的としています。最終シーンは約500個の球を配置したランダムシーンで、Lambertian / Metal / Dielectric の3種類のマテリアルを混在させています。
 
 - **Rust 版**：学習の各段階を独立した Cargo プロジェクトとして保存。最終的に Rayon で画素並列化。
-- **Julia 版**：数式の導出を Jupyter Notebook に記録し、最終版を `AFinalRender.jl` に集約。`Threads.@threads` でサンプル並列化。
+- **Julia 版**：数式の導出を Jupyter Notebook に記録し、最終版を `AFinalRender.jl` に集約。`Threads.@threads` で行並列化。
 - **性能計測**：シリアル版と並列版の実行時間をテキストログとして保存。
 
 ### 見どころ
@@ -27,7 +27,7 @@ Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](R
 - Lambertian / Metal / Dielectric のマテリアル、Schlick 近似、全反射
 - 位置合わせ可能なカメラと薄レンズ近似による被写界深度
 - Rust の `enum` による静的ディスパッチ、`Arc` によるマテリアル共有、Rayon による画素並列化
-- Julia の型パラメータ付き構造体、多重ディスパッチ、`Threads.@threads` によるサンプル並列化
+- Julia の型パラメータ付き構造体、`SVector` による isbits な3Dベクトル、`Threads.@threads` による行並列化
 - 書籍の数式を自分で追った Notebook と、実際の出力画像・計測ログ
 
 ### 技術スタック
@@ -59,9 +59,9 @@ Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](R
 
 ### Julia
 
-- `Ray{T,C}`、`SphereWithMat{T,C,D}` など型パラメータ付き構造体で、数値型とベクトル型を抽象化。
-- `Lambertian` / `FuzzyMetal` / `Dielectric` を `abstract type Material` の下に定義し、`scatter` を多重ディスパッチ。
-- `Threads.@threads` でサンプル方向に並列化。サンプルごとに RNG とフレームバッファを割り当て、最後に平均。
+- `Vec3{T} = SVector{3,T}`、`Ray{T}`、`SphereWithMat{T,D}` など型パラメータ付き構造体で、数値型 `T` を抽象化。
+- `Lambertian` / `FuzzyMetal` / `Dielectric` を `abstract type Material` の下に定義し、単一の `HitRecord` とマテリアル分岐で散乱を処理。
+- `Threads.@threads :static` で行方向に並列化。行ごとに RNG を持ち、画素ごとにサンプルを蓄積して平均。
 - Snell の法則、Schlick 近似、薄レンズ近似などの導出を Notebook に記録。
 
 主なファイル：
@@ -121,7 +121,7 @@ Rust 版は、書籍の章に対応したスナップショットをディレク
 ### 計測からわかったこと
 
 - 画素並列は実装が比較的単純で、Rayon の導入だけで実用的な速度向上が得られた。
-- Julia 版はサンプルごとに全画面バッファを持つ設計のため、メモリ消費が大きい。型安定性・アロケーション・並列粒度には改善余地がある。
+- Julia 版は以前サンプルごとに全画面バッファを持っていたが、現在は行並列＋1画素ずつサンプル蓄積に変更し、メモリ消費を解消。型安定性とアロケーションも改善済み。
 - 同一条件でのプロファイリングと再計測が次の課題。
 
 ## リポジトリ構成
@@ -209,7 +209,7 @@ pwsh ./Measure-Performance.ps1 fuzzy_mt
 ## 今後の改善
 
 - **Rust**：19 個の独立プロジェクトを Cargo workspace にまとめ、共通のレイトレーサをクレート化する。交差判定・マテリアルのユニットテスト、Criterion によるベンチマーク、CI を追加する。
-- **Julia**：プロファイルに基づいて型安定性とアロケーションを改善し、サンプル並列から画素タイル並列へ変更する。Rust 版と同じシーン・同じマシンで再計測する。
+- **Julia**：型安定化と行並列化は実装済み。次は BVH の導入と、Rust 版と同じシーン・同じマシンでの再計測を行う。
 - **共通**：シーンのパラメータを CLI から指定できるようにし、解像度・spp・深度・スレッド数の比較を自動化する。
 
 ## 出典

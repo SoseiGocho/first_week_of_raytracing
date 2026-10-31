@@ -74,12 +74,20 @@ pub fn reflectance(cos_theta: f64, refraction_index: f64) -> f64 {
     r0_squared + (1.0f64 - r0_squared) * (1.0f64 - cos_theta).powi(5)
 }
 
+// NOTE: 以前は `gen::<f64>()` の [0, 1) を使っており、単位円の第1象限しか
+// サンプリングできていなかった。[-1, 1) の一様乱数に修正する。
 pub fn new_random_vec3_in_unit_disk<T>(st_rng: &mut T) -> Vec3
 where
     T: rnd::Rng,
 {
     loop {
-        let p = na::vector![st_rng.gen::<f64>(), st_rng.gen::<f64>(), 0.0f64];
-        if p.norm_squared() < 1.0f64 { return p }
+        let p = na::vector![
+            st_rng.gen_range(-1.0f64..1.0f64),
+            st_rng.gen_range(-1.0f64..1.0f64),
+            0.0f64
+        ];
+        if p.norm_squared() < 1.0f64 {
+            return p;
+        }
     }
 }

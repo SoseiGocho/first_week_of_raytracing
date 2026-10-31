@@ -1,93 +1,52 @@
-using Distributions
 using FileIO
 using Images
 using LinearAlgebra
 using Random
-using Statistics
+using StaticArrays
 
-function convert_to_unit_vector(vector::C
-        )::C where {T <: Number, C <: AbstractVector{T}}
-    return vector ./ sqrt(dot(vector, vector))
+# SVector の dot / cross / + / * / / は StaticArrays.jl 側で @inline 定義済み。
+# ここで再定義すると型パイレートになるため、そのまま利用する。
+const Vec3{T} = SVector{3, T}
+
+@inline function convert_to_unit_vector(vector::C
+        )::C where {T <: AbstractFloat, C <: AbstractVector{T}}
+    return vector / sqrt(dot(vector, vector))
 end
 
-function random_in_unit_sphere(T::Type,
+@inline function random_in_unit_sphere(::Type{T},
         random_generator::AbstractRNG
-        )::AbstractArray{T}
+        )::Vec3{T} where {T <: AbstractFloat}
     while true
-        p = [rand(random_generator, Uniform(-one(T), one(T))),
-            rand(random_generator, Uniform(-one(T), one(T))),
-            rand(random_generator, Uniform(-one(T), one(T)))]
-        if dot(p, p) >= one(T)
-            continue
-        else
-            return p
+        x = 2rand(random_generator, T) - one(T)
+        y = 2rand(random_generator, T) - one(T)
+        z = 2rand(random_generator, T) - one(T)
+        if x * x + y * y + z * z < one(T)
+            return Vec3{T}(x, y, z)
         end
     end
 end
 
-function random_unit_vector(T::Type{<: Number},
-    random_generator::AbstractRNG)::AbstractArray{T}
+@inline function random_unit_vector(::Type{T},
+        random_generator::AbstractRNG
+        )::Vec3{T} where {T <: AbstractFloat}
     return convert_to_unit_vector(
         random_in_unit_sphere(T, random_generator))
 end
 
-struct Ray{T <: Number, C <: AbstractVector{T}}
-    origin::C
-    direction::C
+struct Ray{T <: AbstractFloat}
+    origin::Vec3{T}
+    direction::Vec3{T}
 end
 
-function fly(ray::Ray{T, C}, t::T
-        )::C where {T <: Number, C <: AbstractVector{T}}
+@inline function fly(ray::Ray{T}, t::T
+        )::Vec3{T} where {T <: AbstractFloat}
     return ray.origin + t * ray.direction
 end
 
 abstract type Material end
 
-struct InnerHitRecordWithMat{T <: Number, C <: AbstractVector{T}, D <: Material}
-    position::C
-    normal::C
-    t::T
-    material::D
-end
-
-struct OuterHitRecordWithMat{T <: Number, C <: AbstractVector{T}, D <: Material}
-    position::C
-    normal::C
-    t::T
-    material::D
-end
-
-FrontFacedNormalHitRecordWithMat{T, C, D} =
-    Union{InnerHitRecordWithMat{T, C, D},
-        OuterHitRecordWithMat{T, C, D}
-        } where {T <: Number, C <: AbstractVector{T}, D <: Material}
-
-abstract type Hittable end
-
-struct HittablesWithMat
-    render_objects::AbstractArray{Hittable}
-end
-
-struct SphereWithMat{T <: Number, C <: AbstractVector{T}, D <: Material} <: Hittable
-    center::C
-    radius::T
-    material::D
-end
-
 struct Lambertian{T <: AbstractFloat} <: Material
     albedo::RGB{T}
-end
-
-function scatter(ray_in::Ray{T, C},
-        rec::FrontFacedNormalHitRecordWithMat{T, C, Lambertian{T}},
-        random_generator::AbstractRNG
-        )::Tuple{Ray{T, C}, RGB{T}, Bool} where {T <: AbstractFloat, C <: AbstractVector{T}}
-    scatter_direction = rec.normal + random_unit_vector(T, random_generator)
-    return (Ray(rec.position, scatter_direction), rec.material.albedo, true)
-end
-
-function reflect(v::C, n::C)::C where {T <: Number, C <: AbstractVector{T}}
-    return v - 2dot(v, n)n
 end
 
 struct FuzzyMetal{T <: AbstractFloat} <: Material
@@ -95,231 +54,255 @@ struct FuzzyMetal{T <: AbstractFloat} <: Material
     fuzziness::T
 end
 
-function scatter(ray_in::Ray{T, C},
-        rec::FrontFacedNormalHitRecordWithMat{T, C, FuzzyMetal{T}},
-        random_generator::AbstractRNG
-        )::Tuple{Ray{T, C}, RGB{T}, Bool} where {T <: AbstractFloat, C <: AbstractVector{T}}
-    reflected = reflect(convert_to_unit_vector(ray_in.direction), rec.normal)
-    scattered = Ray(rec.position, reflected + rec.material.fuzziness * random_in_unit_sphere(T, random_generator))
-    return (scattered, rec.material.albedo, dot(scattered.direction, rec.normal) > 0)
+struct Dielectric{T <: AbstractFloat} <: Material
+    ref_idx::T
 end
 
-function refract(uv::C, n::C, etai_over_etat::T)::C where {T <: AbstractFloat, C <: AbstractVector{T}}
+struct HitRecord{T <: AbstractFloat}
+    position::Vec3{T}
+    normal::Vec3{T}
+    t::T
+    front_face::Bool
+    material::Union{Lambertian{T}, FuzzyMetal{T}, Dielectric{T}}
+end
+
+struct SphereWithMat{T <: AbstractFloat, D <: Material}
+    center::Vec3{T}
+    radius::T
+    material::D
+end
+
+const Hittable{T} = Union{
+    SphereWithMat{T, Lambertian{T}},
+    SphereWithMat{T, FuzzyMetal{T}},
+    SphereWithMat{T, Dielectric{T}}
+}
+
+struct HittablesWithMat{T <: AbstractFloat}
+    render_objects::Vector{Hittable{T}}
+end
+
+@inline function reflect(v::Vec3{T}, n::Vec3{T}
+        )::Vec3{T} where {T <: AbstractFloat}
+    return v - 2 * dot(v, n) * n
+end
+
+@inline function refract(uv::Vec3{T}, n::Vec3{T}, etai_over_etat::T
+        )::Vec3{T} where {T <: AbstractFloat}
     cos_theta = dot(-uv, n)
-    r_out_parallel = etai_over_etat * (uv + cos_theta*n)
+    r_out_parallel = etai_over_etat * (uv + cos_theta * n)
     r_out_perp = -sqrt(abs(one(T) - dot(r_out_parallel, r_out_parallel))) * n
     return r_out_parallel + r_out_perp
 end
 
-struct Dielectric{T} <: Material
-    ref_idx::T
-end
-
-function schlick(cosine::T, ref_idx::T)::T where T <: Number
+@inline function schlick(cosine::T, ref_idx::T
+        )::T where {T <: AbstractFloat}
     r0 = (one(T) - ref_idx) / (one(T) + ref_idx)
-    sqr0 = r0 ^2
-    return sqr0 + (one(T) - sqr0)*((one(T) - cosine)^5)
+    sqr0 = r0 ^ 2
+    return sqr0 + (one(T) - sqr0) * ((one(T) - cosine) ^ 5)
 end
 
-function scatter(ray_in::Ray{T, C},
-        rec::InnerHitRecordWithMat{T, C, Dielectric{T}},
+@inline function scatter(ray_in::Ray{T},
+        rec::HitRecord{T},
         random_generator::AbstractRNG
-        )::Tuple{Ray{T, C}, RGB{T}, Bool} where {T <: AbstractFloat, C <: AbstractVector{T}}
-    pure_color = RGB(one(T), one(T), one(T))
-    etai_over_etat = rec.material.ref_idx
-    unit_direction = convert_to_unit_vector(ray_in.direction)
-    cos_theta = min(dot(-unit_direction, rec.normal), 1.0)
-    sin_theta = sqrt(one(T) - cos_theta*cos_theta)
-    cannot_refract = etai_over_etat * sin_theta > one(T)
-    reflactance = schlick(cos_theta, etai_over_etat)
-    if cannot_refract || reflactance > rand(random_generator, T)
-        reflected = reflect(unit_direction, rec.normal)
-        scattered = Ray(rec.position, reflected)
-        return (scattered, pure_color, true)
-    else
-        refracted = refract(unit_direction, rec.normal, etai_over_etat)
-        scattered = Ray(rec.position, refracted)
-        return (scattered, pure_color, true)
-    end
-end
+        )::Tuple{Ray{T}, RGB{T}, Bool} where {T <: AbstractFloat}
+    material = rec.material
 
-function scatter(ray_in::Ray{T, C},
-        rec::OuterHitRecordWithMat{T, C, Dielectric{T}},
-        random_generator::AbstractRNG
-        )::Tuple{Ray{T, C}, RGB{T}, Bool} where {T <: AbstractFloat, C <: AbstractVector{T}}
-    pure_color = RGB(one(T), one(T), one(T))
-    etai_over_etat = one(T) / rec.material.ref_idx
-    unit_direction = convert_to_unit_vector(ray_in.direction)
-    cos_theta = min(dot(-unit_direction, rec.normal), 1.0)
-    sin_theta = sqrt(one(T) - cos_theta*cos_theta)
-    cannot_refract = etai_over_etat * sin_theta > one(T)
-    reflactance = schlick(cos_theta, etai_over_etat)
-    if cannot_refract || reflactance > rand(random_generator, T)
-        reflected = reflect(unit_direction, rec.normal)
-        scattered = Ray(rec.position, reflected)
-        return (scattered, pure_color, true)
-    else
-        refracted = refract(unit_direction, rec.normal, etai_over_etat)
-        scattered = Ray(rec.position, refracted)
-        return (scattered, pure_color, true)
-    end
-end
+    if material isa Lambertian{T}
+        scatter_direction = rec.normal + random_unit_vector(T, random_generator)
+        if dot(scatter_direction, scatter_direction) < T(1e-8)
+            scatter_direction = rec.normal
+        end
+        return (Ray(rec.position, scatter_direction), material.albedo, true)
 
-function random_in_unit_disk(T::Type{<: Number}, random_generator::AbstractRNG)
-    while true
-        p = [rand(random_generator, Uniform(-one(T), one(T))),
-                rand(random_generator, Uniform(-one(T), one(T))),
-                zero(T)]
-        if dot(p, p) >= one(T)
-            continue
+    elseif material isa FuzzyMetal{T}
+        reflected = reflect(convert_to_unit_vector(ray_in.direction), rec.normal)
+        scattered = Ray(rec.position,
+            reflected + material.fuzziness * random_in_unit_sphere(T, random_generator))
+        return (scattered, material.albedo,
+            dot(scattered.direction, rec.normal) > zero(T))
+
+    else
+        pure_color = RGB(one(T), one(T), one(T))
+        etai_over_etat = rec.front_face ? one(T) / material.ref_idx : material.ref_idx
+        unit_direction = convert_to_unit_vector(ray_in.direction)
+        cos_theta = min(dot(-unit_direction, rec.normal), one(T))
+        sin_theta = sqrt(one(T) - cos_theta * cos_theta)
+        cannot_refract = etai_over_etat * sin_theta > one(T)
+        reflectance = schlick(cos_theta, etai_over_etat)
+        if cannot_refract || reflectance > rand(random_generator, T)
+            scattered = Ray(rec.position, reflect(unit_direction, rec.normal))
         else
-            return p
+            scattered = Ray(rec.position,
+                refract(unit_direction, rec.normal, etai_over_etat))
+        end
+        return (scattered, pure_color, true)
+    end
+end
+
+@inline function random_in_unit_disk(::Type{T},
+        random_generator::AbstractRNG
+        )::SVector{2, T} where {T <: AbstractFloat}
+    while true
+        x = 2rand(random_generator, T) - one(T)
+        y = 2rand(random_generator, T) - one(T)
+        if x * x + y * y < one(T)
+            return SVector{2, T}(x, y)
         end
     end
 end
 
-struct LensCamera{T <: Number, U <: Unsigned, C <: AbstractVector{T}}
+struct LensCamera{T <: AbstractFloat, U <: Unsigned}
     image_height::U
     image_width::U
-    origin::C
-    horizontal::C
-    vertical::C
-    lower_left_corner::C
-    u::C
-    v::C
-    w::C
+    origin::Vec3{T}
+    horizontal::Vec3{T}
+    vertical::Vec3{T}
+    lower_left_corner::Vec3{T}
+    u::Vec3{T}
+    v::Vec3{T}
+    w::Vec3{T}
     lens_radius::T
 end
 
-function LensCamera(lookfrom::C, lookat::C, vup::C,
+function LensCamera(lookfrom::Vec3{T}, lookat::Vec3{T}, vup::Vec3{T},
         vfov::T,
         image_height::U,
         image_width::U,
         aperture::T,
         focus_dist::T
-        )::LensCamera{T, U, C} where {T <: Number, U <: Unsigned, C <: AbstractVector{T}}
-    aspect_ratio = T(image_width)/T(image_height)
+        )::LensCamera{T, U} where {T <: AbstractFloat, U <: Unsigned}
+    aspect_ratio = T(image_width) / T(image_height)
     theta = deg2rad(vfov)
-    h = tan(theta/2)
-    viewport_height = 2h
+    h = tan(theta / T(2))
+    viewport_height = T(2) * h
     viewport_width = aspect_ratio * viewport_height
 
     w = convert_to_unit_vector(lookfrom - lookat)
-    u = convert_to_unit_vector(cross(vup,  w))
+    u = convert_to_unit_vector(cross(vup, w))
     v = cross(w, u)
 
     origin = lookfrom
     horizontal = focus_dist * viewport_width * u
     vertical = focus_dist * viewport_height * v
-    lower_left_corner = origin - horizontal ./ 2 - vertical ./ 2 - focus_dist * w
+    lower_left_corner = origin - horizontal / T(2) - vertical / T(2) - focus_dist * w
 
-    lens_radius = aperture / 2
-    return LensCamera(image_height,
+    lens_radius = aperture / T(2)
+    return LensCamera{T, U}(image_height,
         image_width,
         origin,
         horizontal,
         vertical,
         lower_left_corner,
-        u,v,w,
+        u, v, w,
         lens_radius)
 end
 
-function calc_uv!(T::Type,
-        camera,
+@inline function calc_uv!(::Type{T},
+        camera::LensCamera{T, U},
         i::U, j::U,
         random_generator::AbstractRNG
-        )::Tuple{T, T} where {U <: Unsigned}
-    return ((T(i) + rand(random_generator, T) - one(T)) / (camera.image_width - one(T)),
-        (camera.image_height + rand(random_generator, T) - T(j)) / (camera.image_height - one(T)))
+        )::Tuple{T, T} where {T <: AbstractFloat, U <: Unsigned}
+    return ((T(i) + rand(random_generator, T) - one(T)) /
+            (T(camera.image_width) - one(T)),
+        (T(camera.image_height) + rand(random_generator, T) - T(j)) /
+            (T(camera.image_height) - one(T)))
 end
 
-function get_ray(camera::LensCamera,
+@inline function get_ray(camera::LensCamera{T, U},
         s::T, t::T,
         random_generator::AbstractRNG
-        )::Ray where {T <: Number}
+        )::Ray{T} where {T <: AbstractFloat, U <: Unsigned}
     rd = camera.lens_radius * random_in_unit_disk(T, random_generator)
     offset = camera.u * rd[1] + camera.v * rd[2]
 
     return Ray(camera.origin + offset,
         camera.lower_left_corner
-        + s .* camera.horizontal
-        + t .* camera.vertical
+        + s * camera.horizontal
+        + t * camera.vertical
         - camera.origin - offset)
 end
 
-function is_face_normal(ray::Ray{T, C},
-        outward_normal::C
-        )::Bool where {T <: Number, C <: AbstractVector{T}}
+@inline function is_face_normal(ray::Ray{T},
+        outward_normal::Vec3{T}
+        )::Bool where {T <: AbstractFloat}
     return dot(ray.direction, outward_normal) < zero(T)
 end
 
-function hit_within_or(sphere::SphereWithMat{T, C, D},
-        ray::Ray{T, C},
+@inline function hit_within_or(sphere::SphereWithMat{T, D},
+        ray::Ray{T},
         t_min::T, t_max::T, t::T
-        )::Union{FrontFacedNormalHitRecordWithMat{T, C, D}, Nothing} where {T <: Number, C <: AbstractVector{T}, D <: Material}
+        )::Union{HitRecord{T}, Nothing} where {T <: AbstractFloat, D <: Material}
     if t_min < t < t_max
         position = fly(ray, t)
         outward_normal = (position - sphere.center) / sphere.radius
-        if is_face_normal(ray, outward_normal)
-            return OuterHitRecordWithMat(position, outward_normal, t, sphere.material)
-        else
-            return InnerHitRecordWithMat(position, -outward_normal, t, sphere.material)
-        end
+        front_face = is_face_normal(ray, outward_normal)
+        normal = front_face ? outward_normal : -outward_normal
+        return HitRecord(position, normal, t, front_face, sphere.material)
     end
-    return
+    return nothing
 end
 
-function hit_or(sphere::SphereWithMat{T, C, D},
-        ray::Ray{T, C},
+# NOTE: smaller が範囲外の場合は bigger を試す。球の内側から出るレイで
+# 2番目の交点を見失わないようにするため。
+@inline function hit_or(sphere::SphereWithMat{T, D},
+        ray::Ray{T},
         t_min::T, t_max::T
-        )::Union{FrontFacedNormalHitRecordWithMat{T, C, D}, Nothing} where {T <: Number, C <: AbstractVector{T}, D <: Material}
+        )::Union{HitRecord{T}, Nothing} where {T <: AbstractFloat, D <: Material}
     oc = ray.origin - sphere.center
     a = dot(ray.direction, ray.direction)
     half_b = dot(oc, ray.direction)
     c = dot(oc, oc) - sphere.radius * sphere.radius
     discriminant = half_b * half_b - a * c
-    if discriminant > 0
+    if discriminant > zero(T)
         root = sqrt(discriminant)
         smaller = (-half_b - root) / a
-        return hit_within_or(sphere, ray, t_min, t_max, smaller)
+        rec = hit_within_or(sphere, ray, t_min, t_max, smaller)
+        if !isnothing(rec)
+            return rec
+        end
         bigger = (-half_b + root) / a
         return hit_within_or(sphere, ray, t_min, t_max, bigger)
     end
+    return nothing
 end
 
-function hit_or(hittables::HittablesWithMat,
-        ray::Ray{T, C},
+function hit_or(hittables::HittablesWithMat{T},
+        ray::Ray{T},
         t_min::T, t_max::T
-        )::Union{FrontFacedNormalHitRecordWithMat{T, C}, Nothing} where {T <: Number, C <: AbstractVector{T}}
+        )::Union{HitRecord{T}, Nothing} where {T <: AbstractFloat}
     rec = nothing
-    temp_rec = nothing
     closest_so_far = t_max
     for target ∈ hittables.render_objects
         temp_rec = hit_or(target, ray, t_min, closest_so_far)
         if !isnothing(temp_rec)
             rec = temp_rec
-            closest_so_far = temp_rec.t 
+            closest_so_far = temp_rec.t
         end
     end
     return rec
 end
 
-function ray_color(direction::C)::RGB{T} where {T <: AbstractFloat, C <: AbstractVector{T}}
+@inline function ray_color(direction::Vec3{T}
+        )::RGB{T} where {T <: AbstractFloat}
     unit_direction = convert_to_unit_vector(direction)
-    parameter = (unit_direction[2] + one(T)) / 2
-    return RGB(((one(T) - parameter) * ones(typeof(unit_direction[2]), 3) + parameter * [0.5, 0.7, 1.0])...)
+    parameter = (unit_direction[2] + one(T)) / T(2)
+    return RGB(
+        (one(T) - parameter) + parameter * T(0.5),
+        (one(T) - parameter) + parameter * T(0.7),
+        (one(T) - parameter) + parameter * one(T))
 end
 
-function ray_color(hittables::HittablesWithMat,
-        ray::Ray{T, C},
+function ray_color(hittables::HittablesWithMat{T},
+        ray::Ray{T},
         depth::U,
         random_generator::AbstractRNG
-        )::RGB{T} where {T <: AbstractFloat, U <: Signed, C <: AbstractVector{T}}
+        )::RGB{T} where {T <: AbstractFloat, U <: Signed}
     if depth <= 0
         return RGB(zero(T), zero(T), zero(T))
     end
 
-    rec = hit_or(hittables, ray, 0.001, Inf)
+    rec = hit_or(hittables, ray, T(0.001), T(Inf))
     if isnothing(rec)
         return ray_color(ray.direction)
     else
@@ -333,156 +316,155 @@ function ray_color(hittables::HittablesWithMat,
     end
 end
 
-function render_color!(hittable::HittablesWithMat,
-        camera::LensCamera{T, U},
-        max_depth::V,
-        random_generator::AbstractRNG,
-        buffer::C
-        )::C where {T <: AbstractFloat, U <: Unsigned, V <: Signed,
-            C <: AbstractMatrix{RGB{T}}}
-    for i = 1:camera.image_width
-        for j = 1:camera.image_height
-            color = ray_color(hittable,
-                get_ray(camera,
-                    calc_uv!(T, camera, i, j, random_generator)...,
-                    random_generator),
-                max_depth,
-                random_generator)
-            buffer[j, i] = color
-        end
-    end
-    return buffer
-end
-
-function render_color!(hittable::HittablesWithMat,
+function render_color!(hittable::HittablesWithMat{T},
         camera::LensCamera{T, U},
         samples_per_pixel::U,
         max_depth::V,
-        random_generators::AbstractArray{<: AbstractRNG},
-        buffers::C,
-        buffer::D
-        )::D where {T <: AbstractFloat, U <: Unsigned, V <: Signed,
-            C <: AbstractArray{RGB{T}}, D <: AbstractMatrix{RGB{T}}}
-        Threads.@threads for s = 1:samples_per_pixel
-            buffers[s, :, :] = render_color!(hittable,
-                    camera,
+        seed::UInt64,
+        buffer::C
+        )::C where {T <: AbstractFloat, U <: Unsigned, V <: Signed,
+            C <: AbstractMatrix{RGB{T}}}
+    image_height, image_width = size(buffer)
+    progress = Threads.Atomic{Int}(0)
+    progress_step = max(1, image_height ÷ 20)
+    progress_lock = ReentrantLock()
+
+    Threads.@threads :static for j in 1:image_height
+        random_generator = Xoshiro(seed + UInt64(j))
+        for i in 1:image_width
+            color = zero(RGB{T})
+            for _ in 1:samples_per_pixel
+                color += ray_color(hittable,
+                    get_ray(camera,
+                        calc_uv!(T, camera, UInt(i), UInt(j), random_generator)...,
+                        random_generator),
                     max_depth,
-                    random_generators[s],
-                    buffers[s, :, :])
+                    random_generator)
+            end
+            @inbounds buffer[j, i] = color / T(samples_per_pixel)
         end
 
-        buffer = reshape(
-            mean(buffers, dims=1),
-            (camera.image_height, camera.image_width))
-        return buffer
+        lock(progress_lock) do
+            done = Threads.atomic_add!(progress, 1) + 1
+            if done % progress_step == 0 || done == image_height
+                println("PROGRESS: $(done)/$(image_height) rows " *
+                    "($(round(100 * done / image_height, digits=1))%)")
+            end
+        end
+    end
+
+    return buffer
 end
 
-function random_scene(T::Type{<: AbstractFloat}, random_generator)
-    world = []
-    ground_material = Lambertian(RGB(0.5, 0.5, 0.5))
-    push!(world, SphereWithMat([0.0, -1000.0, 0.0], 1000.0, ground_material))
+function random_scene(::Type{T}, random_generator::AbstractRNG
+        )::HittablesWithMat{T} where {T <: AbstractFloat}
+    world = Hittable{T}[]
+    ground_material = Lambertian(RGB(T(0.5), T(0.5), T(0.5)))
+    push!(world, SphereWithMat(
+        Vec3{T}(T(0), T(-1000), T(0)), T(1000), ground_material))
 
     for a = -11:11
         for b = -11:11
             material = rand(random_generator, T)
-            center = [T(a) + 0.9rand(random_generator, T),
-                0.2,
-                T(b) + 0.9rand(random_generator, T)]
-            diff = center - [4.0, 0.2, 0.0]
-            if dot(diff, diff) >= 0.9
-                if material < 0.8
+            center = Vec3{T}(
+                T(a) + T(0.9) * rand(random_generator, T),
+                T(0.2),
+                T(b) + T(0.9) * rand(random_generator, T))
+            diff = center - Vec3{T}(T(4), T(0.2), T(0))
+            if dot(diff, diff) >= T(0.9)
+                if material < T(0.8)
                     albedo = RGB(
-                        ([rand(random_generator, T),
-                            rand(random_generator, T),
-                            rand(random_generator, T)] ⊙
-                            [rand(random_generator, T),
-                                rand(random_generator, T),
-                                rand(random_generator, T)])...
-                    )
-                    push!(world, SphereWithMat(center, 0.2, Lambertian(albedo)))
-                elseif material < 0.95
+                        rand(random_generator, T) * rand(random_generator, T),
+                        rand(random_generator, T) * rand(random_generator, T),
+                        rand(random_generator, T) * rand(random_generator, T))
+                    push!(world, SphereWithMat(center, T(0.2), Lambertian(albedo)))
+                elseif material < T(0.95)
                     albedo = RGB(
-                        rand(random_generator, Uniform(0.5, 1.0)),
-                            rand(random_generator, Uniform(0.5, 1.0)),
-                            rand(random_generator, Uniform(0.5, 1.0))
-                    )
-                    fuzzyness = rand(random_generator, Uniform(0.0, 0.5))
-                    push!(world, SphereWithMat(center, 0.2,
+                        T(0.5) + T(0.5) * rand(random_generator, T),
+                        T(0.5) + T(0.5) * rand(random_generator, T),
+                        T(0.5) + T(0.5) * rand(random_generator, T))
+                    fuzzyness = T(0.5) * rand(random_generator, T)
+                    push!(world, SphereWithMat(center, T(0.2),
                         FuzzyMetal(albedo, fuzzyness)))
                 else
-                    push!(world, SphereWithMat(center, 0.2, Dielectric(1.5)))
+                    push!(world, SphereWithMat(center, T(0.2),
+                        Dielectric(T(1.5))))
                 end
             end
         end
     end
 
-    push!(world, SphereWithMat([0.0, 1.0, 0.0], 1.0,
-        Dielectric(1.5)))
-    push!(world, SphereWithMat([-4.0, 1.0, 0.0], 1.0,
-        Lambertian(RGB(0.4, 0.2, 0.1))))
-    push!(world, SphereWithMat([4.0, 1.0, 0.0], 1.0,
-        FuzzyMetal(RGB(0.7, 0.6, 0.5), 0.0)))
+    push!(world, SphereWithMat(Vec3{T}(T(0), T(1), T(0)), T(1),
+        Dielectric(T(1.5))))
+    push!(world, SphereWithMat(Vec3{T}(T(-4), T(1), T(0)), T(1),
+        Lambertian(RGB(T(0.4), T(0.2), T(0.1)))))
+    push!(world, SphereWithMat(Vec3{T}(T(4), T(1), T(0)), T(1),
+        FuzzyMetal(RGB(T(0.7), T(0.6), T(0.5)), T(0.0))))
 
-    return HittablesWithMat(world)
+    return HittablesWithMat{T}(world)
 end
 
-function gamma_correction(color::RGB{T})::RGB{T} where T <: AbstractFloat
+@inline function gamma_correction(color::RGB{T}
+        )::RGB{T} where {T <: AbstractFloat}
     return RGB(sqrt(color.r), sqrt(color.g), sqrt(color.b))
 end
 
 function gamma_correction(buffer::AbstractMatrix{RGB{T}}
-        )::AbstractMatrix{RGB{T}} where T <: AbstractFloat
+        ) where {T <: AbstractFloat}
     return gamma_correction.(buffer)
 end
 
+function usage()
+    println("Usage: julia --project=. -t <threads> AFinalRender.jl <output-image>")
+    println("Example: julia --project=. -t 16 AFinalRender.jl outputs/final.png")
+end
+
 function main()
+    if length(ARGS) != 1
+        usage()
+        return
+    end
+    output_path = ARGS[1]
+
+    T = Float64
     println("PROCESS:Generating the scene...")
 
-    # randoms generators settings
+    # random generators settings
     base_generator = Xoshiro(5103)
     scene_generator = Xoshiro(rand(base_generator, UInt64))
-    scene = random_scene(Float64, scene_generator)
+    scene = random_scene(T, scene_generator)
 
     println("NOTICE:The scene has been generated.")
-    println("PROCESS:Initializing RNGs...")
+    println("PROCESS:Initializing the RNG seed...")
 
-    # random generators for each thread
-    generators = [Xoshiro(rand(base_generator, UInt64)) for i in 1:samples_per_pixel]
+    render_seed = rand(base_generator, UInt64)
 
-    println("NOTICE:RNGs have been initialized.")
+    println("NOTICE:The RNG seed has been initialized.")
 
-    # rendering buffers
-    buffers = zeros(RGB{Float64},
-        samples_per_pixel,
-        image_height,
-        image_width)
-    buffer = zeros(RGB{Float64},
-        image_height,
-        image_width)
+    # rendering buffer
+    buffer = zeros(RGB{T}, image_height, image_width)
 
     println("PROCESS:Starting rendering the scene...")
 
-    buffer = render_color!(scene,
-            lens_camera,
-            samples_per_pixel,
-            max_depth,
-            generators,
-            buffers,
-            buffer) |> gamma_correction
+    render_color!(scene,
+        lens_camera,
+        samples_per_pixel,
+        max_depth,
+        render_seed,
+        buffer)
 
     println("NOTICE:Rendering has been finished.")
     println("PROCESS:Starting save the buffer.")
 
-    save(ARGS[1], buffer)
+    save(output_path, gamma_correction(buffer))
 
     println("FINISHED:All is done!")
-
 end
 
 # lens camera parameters
-const lookfrom = [13.0, 2.0, 3.0]
-const lookat = [0.0, 0.0, 0.0]
-const vup = [0.0, 1.0, 0.0]
+const lookfrom = Vec3{Float64}(13.0, 2.0, 3.0)
+const lookat = Vec3{Float64}(0.0, 0.0, 0.0)
+const vup = Vec3{Float64}(0.0, 1.0, 0.0)
 const vfov = 20.0
 const image_height = UInt(720)
 const image_width = UInt(1280)
@@ -500,4 +482,6 @@ const lens_camera = LensCamera(lookfrom,
 const samples_per_pixel = UInt(128)
 const max_depth = 64
 
-main()
+if abspath(PROGRAM_FILE) == abspath(@__FILE__)
+    main()
+end

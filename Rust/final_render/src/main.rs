@@ -37,12 +37,14 @@ fn main() {
 
             if (center - na::point![4.0f64, 0.2f64, 0.0f64]).norm() > 0.9f64 {
                 if choose_material < 0.8f64 {
-                    let albedo = rt::Color::from(
-                        rt::new_random_unit_vec3(&mut st_rng)
-                            .component_mul(&rt::new_random_unit_vec3(&mut st_rng))
-                            .data
-                            .0[0],
-                    );
+                    // NOTE: 以前は単位ベクトル同士の成分積を使っており、各成分が
+                    // [-1, 1] のため負の albedo が生成されていた。書籍と同様に
+                    // [0, 1) の乱数同士の積にする。
+                    let albedo = rt::Color::from([
+                        st_rng.gen::<f64>() * st_rng.gen::<f64>(),
+                        st_rng.gen::<f64>() * st_rng.gen::<f64>(),
+                        st_rng.gen::<f64>() * st_rng.gen::<f64>(),
+                    ]);
 
                     object_list.push(rt::Visible::Sphere(rt::Sphere {
                         center,

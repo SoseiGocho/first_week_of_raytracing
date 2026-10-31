@@ -106,7 +106,8 @@ impl Camera {
     where
         T: rnd::Rng + rnd::SeedableRng + std::fmt::Debug + std::marker::Send + std::marker::Sync,
     {
-        // ループ毎に乱数生成器作り直した挙げ句シード値もスレッドごとで使いまわしたバカタレがいるらしい
+        // NOTE: 以前はループごとに乱数生成器を再生成し、シード値も使い回していたため、
+        // 同じ乱数列が繰り返されていた。現在はスレッドごとに異なるシードで初期化する。
         let mut initial_rng_state = T::seed_from_u64(random_seed);
         let thread_local_rngs_state: Vec<Arc<Mutex<T>>> =
             (0..rayon::current_num_threads())

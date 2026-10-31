@@ -11,7 +11,6 @@ use rayon::prelude::*;
 mod visible;
 pub use visible::ray::utility::math::Degree;
 use visible::ray::utility::math::Radian;
-pub use visible::ray::utility::new_random_unit_vec3;
 use visible::ray::utility::{gamma, new_random_vec3_in_unit_disk};
 use visible::UVec3;
 pub use visible::{

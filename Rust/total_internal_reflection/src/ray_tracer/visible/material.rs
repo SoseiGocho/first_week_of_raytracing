@@ -97,15 +97,14 @@ pub struct Metal {
     fuzzyness: f64,
 }
 
+// NOTE: 以前は `fuzzy - 1.0 < f64::EPSILON` という逆の条件でクランプしており、
+// 0.0 を含む 1.0 以下の fuzz がすべて 1.0 に置き換わっていた。
+// ここでは fuzz が 1.0 を超える場合だけ 1.0 にクランプする。
 impl Metal {
     pub const fn new(color: &Color, fuzzy: f64) -> Metal {
         Metal {
             albedo: *color,
-            fuzzyness: if fuzzy - 1.0f64 < f64::EPSILON {
-                1.0f64
-            } else {
-                fuzzy
-            },
+            fuzzyness: if fuzzy < 1.0f64 { fuzzy } else { 1.0f64 },
         }
     }
 }
