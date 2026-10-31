@@ -1,0 +1,14 @@
+# Rust build artifacts
+**/target/
+
+# Julia local environment
+Julia/env/
+
+# Jupyter
+**/.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

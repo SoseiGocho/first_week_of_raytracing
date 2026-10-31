@@ -1,0 +1,12 @@
+[package]
+name = "schlick_approximation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = "0.4.40"
+image = "0.25.2"
+nalgebra = "0.32.5"
+rand = "0.8.5"
+rand_xoshiro = "0.6.0"
+rayon = "1.10"
