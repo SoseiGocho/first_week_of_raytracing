@@ -6,7 +6,7 @@
 
 | Rust `final_render` | Julia `AFinalRender` |
 |:---:|:---:|
-| ![Rust final render](Rust/result/20250304215617_09_final_render.png) | ![Julia final render](Julia/outputs/AFinalRenderHDS128D64.png) |
+| ![Rust final render](Rust/result/20250304215617_09_final_render.png) | ![Julia final render](Julia/outputs/AFinalRenderS128D64Corrected.png) |
 | 1280×720 / 512 spp / depth 64 | 1280×720 / 128 spp / depth 64 |
 
 Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](Rust/result/20250304233401_09_oreore_final.png)。
