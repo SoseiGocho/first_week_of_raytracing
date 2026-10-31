@@ -9,7 +9,7 @@ mod ray_tracer;
 use ray_tracer as rt;
 
 fn main() {
-    let camera = rt::Camera::new(16.0 / 9.0, 720, 2.0, 1.0, 128, 64);
+    let camera = rt::Camera::new(16.0 / 9.0, 360, 2.0, 1.0, 128, 64);
 
     let ground = Rc::new(rt::Material::Lambertian(rt::Lambertian {
         albedo: rt::Color::from([0.8f64, 0.8f64, 0.0f64]),

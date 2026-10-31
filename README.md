@@ -6,8 +6,8 @@
 
 | Rust `final_render` | Julia `AFinalRender` |
 |:---:|:---:|
-| ![Rust final render](Rust/result/20250304215617_09_final_render.png) | ![Julia final render](Julia/outputs/AFinalRenderS128D64Corrected.png) |
-| 1280×720 / 512 spp / depth 64 | 1280×720 / 128 spp / depth 64 |
+| ![Rust final render](Rust/result/20261031200759_09_final_render.png) | ![Julia final render](Julia/outputs/AFinalRenderS128D64Corrected.png) |
+| 640×360 / 128 spp / depth 64 | 640×360 / 128 spp / depth 64 |
 
 Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](Rust/result/20250304233401_09_oreore_final.png)。
 
@@ -34,7 +34,7 @@ Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](R
 
 | 領域 | 使用技術 |
 |---|---|
-| 言語 | Rust 2021 / Julia 1.8.5 |
+| 言語 | Rust 2021 / Julia 1.13.3 |
 | 線形代数 | `nalgebra` / `LinearAlgebra` |
 | 画像出力 | `image` / `Images.jl`, `ImageIO` |
 | 乱数 | `rand` + `rand_xoshiro`（`Xoshiro256**`）/ `Random.Xoshiro` |
@@ -90,33 +90,30 @@ Rust 版は、書籍の章に対応したスナップショットをディレク
 
 ### 計測方法
 
-- **Rust**：リリースビルドしたバイナリを PowerShell の `Measure-Command` で計測。結果は `Rust/result/*_performance.txt` に保存。
+- **Rust**：リリースビルドしたバイナリを PowerShell の `Measure-Command` で計測。2026 年の再計測（`fuzzy` / `fuzzy_mt` / `final_render`）は 3 回ずつ実行し、`Rust/result/*_time.log` に保存。`oreore_final` は 2025 年の 1 回分のログ（`Rust/result/*_performance.txt`）です。
 - **Julia**：`julia -t N` でスレッド数を指定して実行。結果は `Julia/outputs/*_time.log` に保存。
-- 計測は当時のローカル環境で 1 回ずつの手動実行です。CPU・メモリ・OS はログに残っていないため、絶対値は参考値として扱ってください。
+- `±` が付く行は 3 回分の母標準偏差（n で除算）です。CPU・メモリ・OS はログに残っていないため、絶対値は参考値として扱ってください。
 
 ### Rust（Rayon）
 
-| プログラム | 並列化 | 解像度 | spp | 最大深度 | 時間 |
+| プログラム | 並列化 | 解像度 | spp | 最大深度 | 時間(平均±標準偏差) |
 |---|---|---:|---:|---:|---:|
-| `fuzzy` | なし | 1280×720 | 128 | 64 | 27.38 s |
-| `fuzzy_mt` | Rayon | 1280×720 | 128 | 64 | 5.17 s |
-| `final_render` | Rayon | 1280×720 | 512 | 64 | 525.68 s |
-| `oreore_final` | Rayon | 1920×1080 | 1024 | 1024 | 1719.16 s |
+| `fuzzy` | なし | 640×360 | 128 | 64 | 7.2516949±0.04898226884 s |
+| `fuzzy_mt` | Rayon | 640×360 | 128 | 64 | 1.1176023±0.07748718831 s |
+| `final_render` | Rayon | 640×360 | 128 | 64 | 35.89209133±0.3030120323 s |
+| `oreore_final` | Rayon | 1920×1080 | 1024 | 1024 | 1719.16 s（1 回） |
 
-同一シーン・同一設定の `fuzzy` → `fuzzy_mt` では、**約 5.3 倍**の速度向上が得られています。このペアが、並列化の効果を直接示す比較です。
+同一シーン・同一設定の `fuzzy` → `fuzzy_mt` では、**約 6.49 倍**の速度向上が得られています。このペアが、並列化の効果を直接示す比較です。
 
-### Julia（Threads.@threads、当時の計測ログ）
+### Julia（Threads.@threads）
 
-以下は当時の Notebook / スクリプトで得られたログです。現在の `AFinalRender.jl` は 1280×720 / 128 spp / depth 64 を既定値としているため、384×216 の行は当時の実行条件の記録です。
+以下は修正後の `AFinalRender.jl` を 8 スレッドで 3 回実行したログです。現在の既定値は 640×360 / 128 spp / depth 64 です。
 
-| プログラム | 解像度 | spp | 最大深度 | スレッド | 時間 |
+| プログラム | 解像度 | spp | 最大深度 | スレッド | 時間（平均±標準偏差） |
 |---|---|---:|---:|---:|---:|
-| `AFinalRender`（HD） | 1280×720 | 128 | 64 | 16 | 19490.94 s（5時間24分51秒） |
-| `AFinalRender` | 384×216 | 1024 | 1024 | 16 | 15785.30 s（4時間23分5秒） |
-| `AFinalRender` | 384×216 | 128 | 64 | 8 | 1853.76 s（30分54秒） |
-| `AFinalRender` | 384×216 | 4 | 2 | 4 | 50.64 s |
+| `AFinalRender` | 640×360 | 128 | 64 | 8 | 18.9915231±0.3885506903 s |
 
-> Julia 版の数値は Rust 版と同一マシン・同一設定ではありません。また、スレッド数を変えたログ間でも条件が完全に統一されているとは限らないため、スケーリングの評価には同一環境での再計測が必要です。現状は「当時の実装と計測の記録」として掲載しています。
+> Julia 版の数値は Rust 版と同一アルゴリズムではありません。
 
 ### 計測からわかったこと
 
@@ -153,7 +150,7 @@ Rust 版は、書籍の章に対応したスナップショットをディレク
 ### 必要なもの
 
 - Rust（edition 2021、stable）
-- Julia 1.8.5 以降
+- Julia 1.13.3（`Julia/Manifest.toml` の生成環境。他のバージョンは未検証）
 - PowerShell 7（`pwsh`、Rust の計測スクリプトを使う場合）
 
 ### Rust
@@ -202,7 +199,7 @@ pwsh ./Measure-Performance.ps1 fuzzy
 pwsh ./Measure-Performance.ps1 fuzzy_mt
 ```
 
-計測結果は `Rust/result/<タイムスタンプ>_<プログラム名>_performance.txt` に保存されます。
+計測結果は `Rust/result/<タイムスタンプ>_<プログラム名>_time.log` に保存されます。
 
 `Measure-Performance.ps1` は `.exe` を前提とした Windows 用スクリプトです。Linux / macOS では `/usr/bin/time -p ./fuzzy/target/release/fuzzy` などで代替してください。
 

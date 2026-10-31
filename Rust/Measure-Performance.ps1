@@ -8,4 +8,4 @@ Measure-Command { &( ".\" + $ProjectName + "\target\release\" + $ProjectName + "
             + (Get-Date -Format "yyyyMMddHHmmss") `
             + "_" `
             + $ProjectName `
-            + "_performance.txt")
+            + "_time.log")

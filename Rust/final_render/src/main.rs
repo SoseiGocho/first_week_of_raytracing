@@ -109,8 +109,8 @@ fn main() {
     let vup = na::vector![0.0f64, 1.0f64, 0.0f64];
     let camera = rt::Camera::new(
         16.0 / 9.0,
-        720,
-        512,
+        360,
+        128,
         64,
         rt::Degree { degree: 20.0f64 },
         &lookfrom,
