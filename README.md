@@ -91,7 +91,7 @@ Rust 版は、書籍の章に対応したスナップショットをディレク
 ### 計測方法
 
 - **Rust**：リリースビルドしたバイナリを PowerShell の `Measure-Command` で計測。2026 年の再計測（`fuzzy` / `fuzzy_mt` / `final_render`）は 3 回ずつ実行し、`Rust/result/*_time.log` に保存。`oreore_final` は 2025 年の 1 回分のログ（`Rust/result/*_performance.txt`）です。
-- **Julia**：`julia -t N` でスレッド数を指定して実行。結果は `Julia/outputs/*_time.log` に保存。
+- **Julia**：`julia -t N` でスレッド数を指定して実行。結果は `Julia/outputs/*_time.log` に保存。スレッド数・spp・深度・出力先を引数に取る `Julia/Measure-Performance.ps1` でも計測できます。
 - `±` が付く行は 3 回分の母標準偏差（n で除算）です。CPU・メモリ・OS はログに残っていないため、絶対値は参考値として扱ってください。
 
 ### Rust（Rayon）
@@ -139,6 +139,7 @@ Rust 版は、書籍の章に対応したスナップショットをディレク
 ├── Julia/
 │   ├── 1stWeekNotebook.ipynb                  # 数式メモ + 段階実装
 │   ├── AFinalRender.jl                        # 最終レンダラ
+│   ├── Measure-Performance.ps1                # スレッド数・spp・深度を指定する計測スクリプト
 │   ├── Project.toml / Manifest.toml
 │   └── outputs/                               # 出力画像・計測ログ
 ├── .gitignore                                 # target/ や Julia/env/ を除外
