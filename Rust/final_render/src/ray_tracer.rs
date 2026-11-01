@@ -164,6 +164,7 @@ impl Camera {
         T: rnd::Rng + rnd::SeedableRng + std::fmt::Debug + std::marker::Send + std::marker::Sync,
     {
         let mut initial_rng_state = T::seed_from_u64(random_seed);
+
         let thread_local_rngs_state: Vec<Arc<Mutex<T>>> = (0..rayon::current_num_threads())
             .map(|_| Arc::new(Mutex::new(T::seed_from_u64(initial_rng_state.gen::<u64>()))))
             .collect();

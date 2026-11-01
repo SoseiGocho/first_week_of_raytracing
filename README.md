@@ -9,7 +9,7 @@
 | ![Rust final render](Rust/result/20261031200759_09_final_render.png) | ![Julia final render](Julia/outputs/AFinalRenderS128D64Corrected.png) |
 | 640×360 / 128 spp / depth 64 | 640×360 / 128 spp / depth 64 |
 
-Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](Rust/result/20250304233401_09_oreore_final.png)。
+Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](Rust\result\20261101123522_09_oreore_final.png)。
 
 > 乱数シード・カメラ設定・実装段階の違いにより、Rust と Julia で同じシーン構成でも見た目は一致しません。spp は samples per pixel（1画素あたりのサンプル数）、depth はレイの最大反射深度を表します。
 
@@ -90,7 +90,7 @@ Rust 版は、書籍の章に対応したスナップショットをディレク
 
 ### 計測方法
 
-- **Rust**：リリースビルドしたバイナリを PowerShell の `Measure-Command` で計測。2026 年の再計測（`fuzzy` / `fuzzy_mt` / `final_render`）は 3 回ずつ実行し、`Rust/result/*_time.log` に保存。`oreore_final` は 2025 年の 1 回分のログ（`Rust/result/*_performance.txt`）です。
+- **Rust**：リリースビルドしたバイナリを PowerShell の `Measure-Command` で計測。2026 年の再計測（`fuzzy` / `fuzzy_mt` / `final_render` / `oreore_final`）は 3 回ずつ実行し、`Rust/result/*_time.log` に保存。
 - **Julia**：`julia -t N` でスレッド数を指定して実行。結果は `Julia/outputs/*_time.log` に保存。スレッド数・spp・深度・出力先を引数に取る `Julia/Measure-Performance.ps1` でも計測できます。
 - `±` が付く行は 3 回分の母標準偏差（n で除算）です。CPU・メモリ・OS はログに残っていないため、絶対値は参考値として扱ってください。
 
@@ -98,10 +98,10 @@ Rust 版は、書籍の章に対応したスナップショットをディレク
 
 | プログラム | 並列化 | 解像度 | spp | 最大深度 | 時間(平均±標準偏差) |
 |---|---|---:|---:|---:|---:|
-| `fuzzy` | なし | 640×360 | 128 | 64 | 7.2516949±0.04898226884 s |
-| `fuzzy_mt` | Rayon | 640×360 | 128 | 64 | 1.1176023±0.07748718831 s |
-| `final_render` | Rayon | 640×360 | 128 | 64 | 35.89209133±0.3030120323 s |
-| `oreore_final` | Rayon | 1920×1080 | 1024 | 1024 | 1719.16 s（1 回） |
+| `fuzzy` | なし | 640×360 | 128 | 64 | 7.252±0.049 s |
+| `fuzzy_mt` | Rayon | 640×360 | 128 | 64 | 1.118±0.0775 s |
+| `final_render` | Rayon | 640×360 | 128 | 64 | 35.892±0.303 s |
+| `oreore_final` | Rayon | 640×360 | 128 | 64 | 24.138±0.0814 s|
 
 同一シーン・同一設定の `fuzzy` → `fuzzy_mt` では、**約 6.49 倍**の速度向上が得られています。このペアが、並列化の効果を直接示す比較です。
 
@@ -113,7 +113,7 @@ Rust 版は、書籍の章に対応したスナップショットをディレク
 |---|---|---:|---:|---:|---:|
 | `AFinalRender` | 640×360 | 128 | 64 | 8 | 18.9915231±0.3885506903 s |
 
-> Julia 版の数値は Rust 版と同一アルゴリズムではありません。
+> Julia 版の数値は Rust 版と同一並列化アルゴリズムではありません。
 
 ### 計測からわかったこと
 
