@@ -9,7 +9,7 @@
 | ![Rust final render](Rust/result/20261031200759_09_final_render.png) | ![Julia final render](Julia/outputs/AFinalRenderS128D64Corrected.png) |
 | 640×360 / 128 spp / depth 64 | 640×360 / 128 spp / depth 64 |
 
-Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](Rust\result\20261101123522_09_oreore_final.png)。
+Rust の高解像度版（1920×1080 / 1024 spp / depth 1024）は [こちら](Rust/result/20261101123522_09_oreore_final.png)。
 
 > 乱数シード・カメラ設定・実装段階の違いにより、Rust と Julia で同じシーン構成でも見た目は一致しません。spp は samples per pixel（1画素あたりのサンプル数）、depth はレイの最大反射深度を表します。
 
