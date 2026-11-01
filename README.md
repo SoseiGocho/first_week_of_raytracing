@@ -93,7 +93,7 @@ Rust 版は、書籍の章に対応したスナップショットをディレク
 - **Rust**：リリースビルドしたバイナリを PowerShell の `Measure-Command` で計測。2026 年の再計測（`fuzzy` / `fuzzy_mt` / `final_render` / `oreore_final`）は 3 回ずつ実行し、`Rust/result/*_time.log` に保存。
 - **Julia**：`julia -t N` でスレッド数を指定して実行。結果は `Julia/outputs/*_time.log` に保存。スレッド数・spp・深度・出力先を引数に取る `Julia/Measure-Performance.ps1` でも計測できます。
 - `±` が付く行は 3 回分の母標準偏差（n で除算）です。CPU・メモリ・OS はログに残っていないため、絶対値は参考値として扱ってください。
-- 時間は小数点以下3桁（1 ms単位）に丸めて表示しています。
+- 表中の時間は小数点以下3桁（1 ms単位）に丸めて表示しています。
 
 ### Rust（Rayon）
 
